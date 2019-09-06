@@ -501,10 +501,10 @@ anomalycorrection <- function(x, correction_multiplier=0.9, ...) {
   return(x)
 }
 
-Y <- m[1,]
-Y1 <- anomalycorrection(Y, max_anoms=0.02, )
-plot(Y, type='l', lwd=2)
-lines(Y1, col='red')
+# Y <- m[1,]
+# Y1 <- anomalycorrection(Y, max_anoms=0.02, )
+# plot(Y, type='l', lwd=2)
+# lines(Y1, col='red')
 
 
 #-------------------------------------------------------------------------------
@@ -545,51 +545,45 @@ for (i in 1:nrow(m)) {
   print(i)
   # time series for training
   Y <- ts(m[i, train], start=start_month, end=end_month, frequency=12)
-  # anomalies correction
-  #Y <- anomalycorrection(Y, max_anoms=0.02, correction_multiplier=0.9)
   
+  # anomaly correction
+  Y <- anomalycorrection(Y, max_anoms=0.02, correction_multiplier=0.9)
   
   # Seasonal naive model
   naive_pred <- snaive(Y, h=sum(test))
   metrics[i,'snaive_rmse'] <- performance_metric(m[i, test] - as.numeric(naive_pred$mean), type='rmse')
   metrics[i,'snaive_mae'] <- performance_metric(m[i, test] - as.numeric(naive_pred$mean), type='mae')
 
-  
   # Linear model
   lm_model <- tslm(Y ~ trend + season)
   lm_pred <- forecast(lm_model, h=sum(test))
   metrics[i,'lm_rmse'] <- performance_metric(m[i, test] - as.numeric(lm_pred$mean), type='rmse')
   metrics[i,'lm_mae'] <-  performance_metric(m[i, test] - as.numeric(lm_pred$mean), type='mae')
 
-  
   # Seasonal Decomposition by Loess
   stl_model <- stl(Y, t.window=13, s.window='periodic', robust=T, na.action = na.omit)
   stl_pred <- forecast(stl_model, h=sum(test))
   metrics[i,'stl_rmse'] <- performance_metric(m[i, test] - as.numeric(stl_pred$mean), type='rmse')
   metrics[i,'stl_mae'] <- performance_metric(m[i, test] - as.numeric(stl_pred$mean), type='mae')
 
-  
   # State space model
   ets_model <- ets(Y)
   ets_pred <- forecast(ets_model, h=sum(test))
   metrics[i,'ets_rmse'] <- performance_metric(m[i, test] - as.numeric(ets_pred$mean), type='rmse')
   metrics[i,'ets_mae'] <- performance_metric(m[i, test] - as.numeric(ets_pred$mean), type='mae')
-  
-   
+
   # Auto Arima
   arima_model <- auto.arima(Y, d=1, D=1, max.order=7, stepwise=F, parallel=T)
   arima_pred <- forecast(arima_model, h=sum(test))
   metrics[i,'arima_rmse'] <- performance_metric(m[i, test] - as.numeric(arima_pred$mean), type='rmse')
   metrics[i,'arima_mae'] <- performance_metric(m[i, test] - as.numeric(arima_pred$mean), type='mae')
 
-  
   # Neural Net
   nnet_model <- nnetar(Y, na.action=na.omit)
   nnet_pred <- forecast(nnet_model, PI=T, h=sum(test))
   metrics[i,'nnet_rmse'] <- performance_metric(m[i, test] - as.numeric(nnet_pred$mean), type='rmse')
   metrics[i,'nnet_mae'] <- performance_metric(m[i, test] - as.numeric(nnet_pred$mean), type='mae')
-  
-   
+
   # Prophet model
   # time series as data frame
   dfts <- cast_ts2df(Y)
@@ -600,7 +594,6 @@ for (i in 1:nrow(m)) {
   metrics[i,'prophet_rmse'] <- performance_metric(m[i, test] - as.numeric(prophet_pred$yhat), type='rmse')
   metrics[i,'prophet_mae'] <- performance_metric(m[i, test] - as.numeric(prophet_pred$yhat), type='mae')
 
-  
   # BSTS model
   set.seed(56)
   ss <- AddStudentLocalLinearTrend(list(), Y)
@@ -610,14 +603,12 @@ for (i in 1:nrow(m)) {
   metrics[i,'bsts_rmse'] <- performance_metric(m[i, test] - as.numeric(bsts_pred$median), type='rmse')
   metrics[i,'bsts_mae'] <- performance_metric(m[i, test] - as.numeric(bsts_pred$median), type='mae')
 
-  
   # Random Forest for time series
   set.seed(52)
   rf_pred <- predict_RFts(Y, h=sum(test), win=24, ntree=100, proximity=T, nodesize=7)
   metrics[i,'rf_rmse'] <- performance_metric(m[i, test] - as.numeric(rf_pred), type='rmse')
   metrics[i,'rf_mae'] <- performance_metric(m[i, test] - as.numeric(rf_pred), type='mae')
 
-  
   # XGBoost for time series
   set.seed(52)
   xgb_pred <- predict_XGBts(Y, h=sum(test), win=24, nrounds=200,
@@ -625,13 +616,11 @@ for (i in 1:nrow(m)) {
   metrics[i,'xgb_rmse'] <- performance_metric(m[i, test] - as.numeric(xgb_pred), type='rmse')
   metrics[i,'xgb_mae'] <- performance_metric(m[i, test] - as.numeric(xgb_pred), type='mae')
 
-  
   # SVM for time series
   svm_pred <- predict_SVMts(Y, h=sum(test), win=24, type='eps-regression')
   metrics[i,'svm_rmse'] <- performance_metric(m[i, test] - as.numeric(svm_pred), type='rmse')
   metrics[i,'svm_mae'] <- performance_metric(m[i, test] - as.numeric(svm_pred), type='mae')
 
-  
   # Polinomial Linear model for time series
   poly_pred <- predict_Polyts(Y, h=sum(test), win=4, degree=3)
   metrics[i,'poly_rmse'] <- performance_metric(m[i, test] - as.numeric(poly_pred), type='rmse')
@@ -651,52 +640,6 @@ names(res_rmse) <- gsub(names(res_rmse), pattern='_rmse', replacement='')
 names(res_mae) <- gsub(names(res_mae), pattern='_mae', replacement='')
 
 #-------------------------------------------------------------------------------
-# best model for each time series
-best_models <- data.frame(best_mrse=apply(res_rmse, MARGIN=1, function(x) { names(res_rmse)[which.min(x)] }),
-                          best_mae=apply(res_mae, MARGIN=1, function(x) { names(res_mae)[which.min(x)] }),
-                          stringsAsFactors=F)
-best_models
-#    best_mrse best_mae
-# 1      arima    arima
-# 2        stl       rf
-# 3        svm      svm
-# 4        stl      stl
-# 5        stl      stl
-# 6       bsts     bsts
-# 7       bsts     bsts
-# 8      arima    arima
-# 9       bsts    arima
-# 10      nnet     nnet
-# 11      poly     poly
-# 12       stl      stl
-# 13      bsts      ets
-# 14       ets      ets
-# 15       stl       rf
-# 16        rf      svm
-# 17       stl      stl
-# 18       ets     bsts
-# 19      poly     nnet
-# 20       stl   snaive
-# 21   prophet  prophet
-
-# best models 
-unique(c(best_models$best_mrse, best_models$best_mae))
-# "arima"   "stl"     "svm"     "bsts"    "nnet"    "poly"    "ets"     "rf"      "prophet" "snaive" 
-
-# worst models
-setdiff(names(res_rmse), unique(c(best_models$best_mrse, best_models$best_mae))) 
-# "lm"  "xgb" 
-
-
-#-------------------------------------------------------------------------------
-# best model for each time series perfomance
-res_best <- data.frame(best_mrse=apply(res_rmse, MARGIN=1, min), best_mae=apply(res_mae, MARGIN=1, min))
-colMeans(res_best)
-
-# best_mrse  best_mae 
-# 0.1353202 0.1080267 
-
-#-------------------------------------------------------------------------------
 # Metrics averages
 avg_rmse <- data.frame(rmse=colMeans(res_rmse))
 avg_rmse$model <- row.names(avg_rmse)
@@ -713,10 +656,10 @@ avg_rmse
 #      model      rmse
 # 1      ets 0.1537587
 # 2      stl 0.1558784
-# 3     bsts 0.1567420
+# 3     bsts 0.1576505
 # 4       rf 0.1680170
 # 5     poly 0.1743050
-# 6     nnet 0.1753643
+# 6     nnet 0.1770203
 # 7    arima 0.1771315
 # 8      xgb 0.1779876
 # 9  prophet 0.1790823
@@ -728,11 +671,11 @@ avg_mae
 #      model       mae
 # 1      stl 0.1261853
 # 2      ets 0.1281934
-# 3     bsts 0.1291692
+# 3     bsts 0.1294022
 # 4       rf 0.1372784
 # 5     poly 0.1413468
-# 6     nnet 0.1465804
-# 7    arima 0.1473214
+# 6    arima 0.1473214
+# 7     nnet 0.1480254
 # 8      xgb 0.1494120
 # 9  prophet 0.1497299
 # 10     svm 0.1656886
@@ -740,7 +683,7 @@ avg_mae
 # 12  snaive 0.1747639
 
 #-------------------------------------------------------------------------------
-# without Anomaly correction
+# without Anomaly correction - from previous run
 # avg_rmse
 # model      rmse
 # 1      ets 0.1566491
@@ -772,21 +715,82 @@ avg_mae
 # 12  snaive 0.1771783
 
 
+#-------------------------------------------------------------------------------
+# The best model for each time series
+#-------------------------------------------------------------------------------
+best_models <- data.frame(best_mrse=apply(res_rmse, MARGIN=1, 
+                                          function(x) { names(res_rmse)[which.min(x)] }),
+                          best_mae=apply(res_mae, MARGIN=1, 
+                                         function(x) { names(res_mae)[which.min(x)] }),
+                          stringsAsFactors=F)
+best_models
+#    best_mrse best_mae
+# 1       bsts    arima
+# 2        stl       rf
+# 3        svm      svm
+# 4        stl      stl
+# 5        stl      stl
+# 6        ets      ets
+# 7       bsts     bsts
+# 8      arima    arima
+# 9      arima    arima
+# 10      nnet     nnet
+# 11      poly     poly
+# 12       stl      stl
+# 13       ets      ets
+# 14       ets      ets
+# 15       stl       rf
+# 16        rf      svm
+# 17       stl      stl
+# 18      bsts     bsts
+# 19      poly     nnet
+# 20       stl   snaive
+# 21   prophet  prophet
 
 
+# best models overall
+unique(c(best_models$best_mrse, best_models$best_mae))
+# "bsts"    "stl"     "svm"     "ets"     "arima"   "nnet"    "poly"    "rf"      "prophet" "snaive" 
+
+# worst models averall
+setdiff(names(res_rmse), unique(c(best_models$best_mrse, best_models$best_mae))) 
+# "lm"  "xgb" 
+
+# best models mrse
+unique(best_models$best_mrse)
+# "bsts"    "stl"     "svm"     "ets"     "arima"   "nnet"    "poly"    "rf"      "prophet"
+
+# worst models mrse
+setdiff(names(res_rmse), unique(best_models$best_mrse)) 
+# "snaive" "lm"     "xgb"  
+
+# best models mae
+unique(best_models$best_mae)
+# "arima"   "rf"      "svm"     "stl"     "ets"     "bsts"    "nnet"    "poly"    "snaive"  "prophet"
+
+# worst models mae
+setdiff(names(res_mae), unique(best_models$best_mae)) 
+# "lm"  "xgb"
 
 
+#-------------------------------------------------------------------------------
+# best model for each time series accuracy
+res_best <- data.frame(best_mrse=apply(res_rmse, MARGIN=1, min), best_mae=apply(res_mae, MARGIN=1, min))
+colMeans(res_best)
+
+# best_mrse  best_mae 
+# 0.1353341 0.1079975 
 
 
-
-
-
-
+#-------------------------------------------------------------------------------
 # MODEL SELECTION SUMMARY
-# The best two models are: 
+#-------------------------------------------------------------------------------
+# 1. The best models in average are: 
 # stl (Seasonal Decomposition by Loess) 
+# ets (State space model)
 # bsts (Bayesian Structural Time Series) 
 
+# 2. The best accuracy is achived by using different model for each time series
 
 
 
@@ -846,28 +850,3 @@ for (j in 1:nrow(m1)) {
 
 
 #-------------------------------------------------------------------------------
-
-#Re-write df2 for the final Demand in the original scope
-df2 <- filter(df, df$Date >= "2010-01-01" & df$Date <= "2018-12-31" & 
-                  eHubRegion == region & LowLevelProductFamily == product)
-#df2 Is Summarized filered records in the total windows (Train+Test)
-#in other words Actuals!
-df3 <- df2 %>% 
-  group_by(month=floor_date(Date, "month")) %>%
-  summarise(Requiredquantity = sum(Requiredquantity))
-#dfdf3 <- data.frame(date = seq.Date(from = as.Date("2010-01-01"), 
-#                                         to=as.Date("2018-12-31"), by="month"),
-#                         value = df3$Requiredquantity)
-dfdf3 <- data.frame(date=df3$month,value=df3$Requiredquantity)
-
-
-dfdf3Txt<-data.frame(Mois= as.character(dfdf3$date),value=dfdf3$value,Prod=product,Reg=region)
-#dfActualTotal<-data.frame(Mois="",value=0,Prod="",Reg="")
-dfActualTotal<-rbind(dfActualTotal,dfdf3Txt)
-}
-
-# Write data to csv files:
-write.table(dfAutoArimaTotal, "clipboard-16384", sep="\t", row.names=TRUE)
-write.table(dfActualTotal, "clipboard-16384", sep="\t", row.names=TRUE)
-
-
