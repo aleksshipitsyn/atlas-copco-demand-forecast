@@ -155,7 +155,6 @@ anomalycorrection <- function(x, correction_multiplier=0.9, ...) {
 # plot(Y, type='l', lwd=2)
 # lines(Y1, col='red')
 
-
 #-------------------------------------------------------------------------------
 # Test set is the last 12 months
 split_test <- as.integer(dimnames(m)[[2]][(ncol(m)-11):ncol(m)][1])
@@ -175,54 +174,79 @@ end_month <- as.integer(c(substr(dimnames(m)[[2]][sum(train)], 1, 4),
 # prediction on test set
 pred <- matrix(0, nrow(m), ncol=sum(test))
 dimnames(pred)[[2]] <- dimnames(m)[[2]][test]
+stl_pred <- list() 
 
 for (i in 1:nrow(m)) {
    print(i)
-   # time series for training
+   
+  # time series for training
    Y <- ts(m[i, train], start=start_month, end=end_month, frequency=12)
+   
    # anomaly correction
    Y <- anomalycorrection(Y, max_anoms=0.02, correction_multiplier=0.9, plot=F)
 
    # Seasonal Decomposition by Loess
    stl_model <- stl(Y, t.window=13, s.window='periodic', robust=T, na.action = na.omit)
-   stl_pred <- forecast(stl_model, h=sum(test))
-   pred[i,] <- ceiling(as.numeric(stl_pred$mean))
+   stl_pred[[i]] <- forecast(stl_model, h=sum(test))
+   p <- ceiling(as.numeric(stl_pred[[i]]$mean))
+   p[p < 0] <- 0
+   pred[i,] <- p
 }
 
-#-------------------------------------------------------------------------------
-# Plot time series and predictions
-# Input: mat = matrics with time series in rows
-#        pred = matrics with time series predictions in rows
-
-visualize_ts_pred <- function(mat, pred) {
-   par(mfrow=c(3,2))
-   x <- as.Date(paste0(dimnames(mat)[[2]],'01'), format='%Y%m%d')
-   x_pred <- x[(length(x)-ncol(pred)+1):length(x)]
-
-   for (i in 1:nrow(rp)) {
-      # actual time series
-      plot(x=x, y=mat[i,], type='l', las=1, lwd=2, col='black',
-           main=paste('region', rp$region[i],':  product', rp$product[i]),
-           xlab='', ylab='demand')
-      points(x=x, y=mat[i,], pch=20, col='black')
-
-      # predicted
-      abline(v=x_pred[1], lty='dashed', lwd=1, col='blue')
-      lines(x=x_pred, y=pred[i,], col='red')
-      points(x=x_pred, y=pred[i,], pch=20, col='red')
-
-      legend('topleft', col=c('black','red'), lwd=c(1,1), legend=c('actual','predicted'))
-   }
-   par(mfrow=c(1,1))
-}
 
 #-------------------------------------------------------------------------------
 # Output
 #-------------------------------------------------------------------------------
-# plots
-visualize_ts_pred(m, pred)
+# Plot time series and predictions with 95% interval
+# Input: y = time series or numeric vector
+#        s = stl prediction object 
 
-# predictions
+visualize_ts_pred <- function(y, s) {
+  
+  yhat <- ceiling(as.numeric(s$mean))
+  yhat[yhat < 0] <- 0
+  hi95 <- floor(as.numeric(s$upper[,2]))
+  lo95 <- ceiling(as.numeric(s$lower[,2]))
+  lo95[lo95 < 0] <- 0 
+  
+  x <- as.Date(paste0(names(y),'01'), format='%Y%m%d')
+  x_pred <- x[(length(x)-ncol(pred)+1):length(x)]
+  
+  # actual time series
+  plot(x=x, y=y, type='l', las=1, lwd=2, col='black', ylim=c(0, max(c(y, hi95), na.rm=T)),
+       main=paste('region', rp$region[i],':  product', rp$product[i]),
+       xlab='', ylab='demand', )
+  points(x=x, y=y, pch=20, col='black')
+  
+  # predictions start
+  abline(v=x_pred[1], lty='dashed', lwd=1, col='blue')
+  
+  # predictions - mean
+  lines(x=x_pred, y=yhat, col='orange', lwd=2)
+  points(x=x_pred, y=yhat, pch=20, col='orange')
+  
+  # high 95% interval
+  lines(x=x_pred, y=hi95, col='red', lwd=2)
+  points(x=x_pred, y=hi95, pch=20, col='red')
+  
+  # low 95% interval
+  lines(x=x_pred, y=lo95, col='red', lwd=2)
+  points(x=x_pred, y=lo95, pch=20, col='red')
+  
+  legend('topleft', col=c('black','orange','red'), 
+         lwd=c(2,2,2), legend=c('actual','predicted','95% interval'))
+}
+
+
+#-------------------------------------------------------------------------------
+# visualize time series and predictions
+par(mfrow=c(3,3))
+for (i in 1:nrow(m)) {
+  visualize_ts_pred(y=m[i,], s=stl_pred[[i]])
+} 
+par(mfrow=c(1,1))
+
+# mean of predictions
 pred
 #       201803 201804 201805 201806 201807 201808 201809 201810 201811 201812 201901 201902
 #  [1,]      9     10      9     10     10      9      9     10     10      9     10     10
